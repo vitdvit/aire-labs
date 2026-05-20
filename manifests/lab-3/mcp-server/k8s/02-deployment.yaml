@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devops-tools-mcp
+  namespace: mcp-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devops-tools-mcp
+  template:
+    metadata:
+      labels:
+        app: devops-tools-mcp
+    spec:
+      initContainers:
+      - name: install-deps
+        image: python:3.12-slim
+        command:
+        - sh
+        - -c
+        - pip install --no-cache-dir -r /config/requirements.txt --target /app/site-packages
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: app
+          mountPath: /app
+      containers:
+      - name: mcp-server
+        image: python:3.12-slim
+        command:
+        - python
+        - /config/server.py
+        env:
+        - name: PORT
+          value: "8000"
+        - name: PYTHONPATH
+          value: /app/site-packages
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: app
+          mountPath: /app
+        readinessProbe:
+          tcpSocket:
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: devops-tools-mcp
+      - name: app
+        emptyDir: {}

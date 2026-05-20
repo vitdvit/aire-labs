@@ -1,0 +1,34 @@
+apiVersion: kagent.dev/v1alpha2
+kind: RemoteMCPServer
+metadata:
+  name: devops-tools-mcp
+  namespace: kagent
+spec:
+  description: DevOps Tools MCP server with get_time, echo, get_env_info tools
+  url: http://devops-tools-mcp.mcp-system.svc.cluster.local/mcp
+  allowedNamespaces:
+    from: Same
+---
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: devops-assistant
+  namespace: kagent
+spec:
+  declarative:
+    modelConfig: gemini
+    systemMessage: |
+      You are a DevOps assistant with access to MCP tools.
+      Use get_time to get the current time, get_env_info to get cluster environment info, and echo to test connectivity.
+      Answer clearly and concisely.
+    tools:
+    - type: McpServer
+      mcpServer:
+        kind: RemoteMCPServer
+        apiGroup: kagent.dev
+        name: devops-tools-mcp
+        toolNames:
+        - get_time
+        - echo
+        - get_env_info
+        - list_tools

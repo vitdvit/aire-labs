@@ -1,0 +1,23 @@
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 6006
+
+persistence:
+  enabled: true
+  size: 10Gi
+
+postgresql:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+
+auth:
+  enabled: false

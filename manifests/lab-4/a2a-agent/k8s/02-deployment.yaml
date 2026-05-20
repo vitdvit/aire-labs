@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: a2a-agent
+  namespace: a2a-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: a2a-agent
+  template:
+    metadata:
+      labels:
+        app: a2a-agent
+    spec:
+      initContainers:
+      - name: install-deps
+        image: python:3.12-slim
+        command:
+        - sh
+        - -c
+        - pip install --no-cache-dir -r /config/requirements.txt --target /app/site-packages
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: app
+          mountPath: /app
+      containers:
+      - name: a2a-agent
+        image: python:3.12-slim
+        command:
+        - python
+        - /config/agent.py
+        env:
+        - name: PORT
+          value: "8001"
+        - name: PYTHONPATH
+          value: /app/site-packages
+        - name: AGENT_BASE_URL
+          value: http://a2a-agent.a2a-system.svc.cluster.local
+        ports:
+        - containerPort: 8001
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: app
+          mountPath: /app
+        readinessProbe:
+          httpGet:
+            path: /.well-known/agent.json
+            port: 8001
+          initialDelaySeconds: 15
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: a2a-agent
+      - name: app
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: a2a-agent
+  namespace: a2a-system
+spec:
+  selector:
+    app: a2a-agent
+  ports:
+  - port: 80
+    targetPort: 8001
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: a2a-system-to-agentgateway
+  namespace: a2a-system
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    namespace: agentgateway-system
+  to:
+  - group: ""
+    kind: Service
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: a2a-agent
+  namespace: a2a-system
+spec:
+  parentRefs:
+  - name: agentgateway
+    namespace: agentgateway-system
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /a2a
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          type: ReplacePrefixMatch
+          replacePrefixMatch: /
+    backendRefs:
+    - name: a2a-agent
+      namespace: a2a-system
+      port: 80
